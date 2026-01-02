@@ -57,10 +57,10 @@ export function GlassDropdown<T extends string>({
           />
           
           {/* Menu */}
-          <div className={`absolute top-full right-0 mt-2 w-48 rounded-[16px] shadow-[0_12px_48px_rgba(0,0,0,0.25)] z-50 overflow-hidden ${
+          <div className={`absolute top-full right-0 mt-2 w-48 rounded-[16px] backdrop-blur-[40px] border z-50 overflow-hidden ${
             isDark
-              ? 'bg-[#3a3228] border-2 border-white/30'
-              : 'bg-[#d4c5b0] border-2 border-white/40'
+              ? 'bg-[#2d2820]/[0.4] border-white/10'
+              : 'bg-white/[0.12] border-white/20'
           }`}>
             <div className="py-2">
               {options.map((option) => (
@@ -68,8 +68,8 @@ export function GlassDropdown<T extends string>({
                   key={option}
                   className={`w-full px-5 py-2.5 text-left text-[13px] font-semibold transition-colors ${
                     isDark
-                      ? 'text-[#e8dfd0] hover:bg-[#e8c571]/20'
-                      : 'text-[#2d2820] hover:bg-[#c9983a]/20'
+                      ? 'text-[#e8dfd0] hover:bg-white/[0.08]'
+                      : 'text-[#2d2820] hover:bg-white/[0.15]'
                   }`}
                   onClick={() => handleSelect(option)}
                 >
