@@ -105,11 +105,13 @@ use soroban_sdk::{
 };
 
 // ==================== MONITORING MODULE ====================
+#[allow(dead_code)]
 mod monitoring {
     use soroban_sdk::{contracttype, symbol_short, Address, Env, String, Symbol};
 
     // Storage keys
     const OPERATION_COUNT: &str = "op_count";
+    #[allow(dead_code)]
     const USER_COUNT: &str = "usr_count";
     const ERROR_COUNT: &str = "err_count";
 
@@ -294,6 +296,7 @@ mod monitoring {
 // ==================== END MONITORING MODULE ====================
 
 // ==================== ANTI-ABUSE MODULE ====================
+#[allow(dead_code)]
 mod anti_abuse {
     use soroban_sdk::{contracttype, symbol_short, Address, Env};
 
@@ -608,7 +611,7 @@ pub enum DataKey {
     FeeConfig,           // Fee configuration
     RefundApproval(u64), // bounty_id -> RefundApproval
     ReentrancyGuard,
-    IsPaused, // Contract pause state
+    IsPaused,       // Contract pause state
     BountyRegistry, // Vec<u64> of all bounty IDs
 }
 
@@ -638,7 +641,6 @@ pub struct EscrowStats {
     pub total_released_amount: i128,
     pub total_refunded_amount: i128,
 }
-
 
 // ============================================================================
 // Contract Implementation
@@ -779,14 +781,14 @@ impl BountyEscrowContract {
         let mut fee_config = Self::get_fee_config_internal(&env);
 
         if let Some(rate) = lock_fee_rate {
-            if rate < 0 || rate > MAX_FEE_RATE {
+            if !(0..=MAX_FEE_RATE).contains(&rate) {
                 return Err(Error::InvalidFeeRate);
             }
             fee_config.lock_fee_rate = rate;
         }
 
         if let Some(rate) = release_fee_rate {
-            if rate < 0 || rate > MAX_FEE_RATE {
+            if !(0..=MAX_FEE_RATE).contains(&rate) {
                 return Err(Error::InvalidFeeRate);
             }
             fee_config.release_fee_rate = rate;
@@ -1086,7 +1088,7 @@ impl BountyEscrowContract {
         env.storage()
             .persistent()
             .set(&DataKey::Escrow(bounty_id), &escrow);
-            
+
         // Update registry
         let mut registry: Vec<u64> = env
             .storage()
@@ -1094,7 +1096,9 @@ impl BountyEscrowContract {
             .get(&DataKey::BountyRegistry)
             .unwrap_or(vec![&env]);
         registry.push_back(bounty_id);
-        env.storage().instance().set(&DataKey::BountyRegistry, &registry);
+        env.storage()
+            .instance()
+            .set(&DataKey::BountyRegistry, &registry);
 
         // Emit event for off-chain indexing
         emit_funds_locked(
@@ -1328,7 +1332,7 @@ impl BountyEscrowContract {
             bounty_id,
             amount,
             recipient: recipient.clone(),
-            mode: mode.clone(),
+            mode,
             approved_by: admin.clone(),
             approved_at: env.ledger().timestamp(),
         };
@@ -1467,7 +1471,7 @@ impl BountyEscrowContract {
         let refund_record = RefundRecord {
             amount: refund_amount,
             recipient: refund_recipient.clone(),
-            mode: mode.clone(),
+            mode,
             timestamp: env.ledger().timestamp(),
         };
         escrow.refund_history.push_back(refund_record);
@@ -1491,7 +1495,7 @@ impl BountyEscrowContract {
                 amount: refund_amount,
                 refund_to: refund_recipient,
                 timestamp: env.ledger().timestamp(),
-                refund_mode: mode.clone(),
+                refund_mode: mode,
                 remaining_amount: escrow.remaining_amount,
             },
         );
@@ -1664,55 +1668,55 @@ impl BountyEscrowContract {
     /// This function iterates through the registry. For large datasets, use small `pagination.limit` values
     /// to prevent gas limit errors. This is designed for off-chain indexing.
     pub fn get_bounties(
-        env: Env, 
-        filter: EscrowFilter, 
-        pagination: Pagination
+        env: Env,
+        filter: EscrowFilter,
+        pagination: Pagination,
     ) -> Vec<(u64, Escrow)> {
         let registry: Vec<u64> = env
             .storage()
             .instance()
             .get(&DataKey::BountyRegistry)
             .unwrap_or(vec![&env]);
-            
+
         let mut result = vec![&env];
         let mut count: u32 = 0;
         let mut skipped: u64 = 0;
-        
+
         for i in 0..registry.len() {
             // Check pagination limit
             if count >= pagination.limit {
                 break;
             }
-            
+
             let bounty_id = registry.get(i).unwrap();
-            
+
             // Skip invalid IDs/missing data
             if !env.storage().persistent().has(&DataKey::Escrow(bounty_id)) {
                 continue;
             }
-            
+
             let escrow: Escrow = env
                 .storage()
                 .persistent()
                 .get(&DataKey::Escrow(bounty_id))
                 .unwrap();
-                
+
             // Apply Filters
-            
+
             // Status filter
             if let Some(status_val) = filter.status {
                 if (escrow.status as u32) != status_val {
                     continue;
                 }
             }
-            
+
             // Depositor filter
             if let Some(depositor) = &filter.depositor {
                 if &escrow.depositor != depositor {
                     continue;
                 }
             }
-            
+
             // Amount range filter
             if let Some(min) = filter.min_amount {
                 if escrow.amount < min {
@@ -1724,7 +1728,7 @@ impl BountyEscrowContract {
                     continue;
                 }
             }
-            
+
             // Date range filter (using deadline)
             if let Some(start) = filter.start_time {
                 if escrow.deadline < start {
@@ -1736,21 +1740,21 @@ impl BountyEscrowContract {
                     continue;
                 }
             }
-            
+
             // Apply Pagination Skip
             if skipped < pagination.start_index {
                 skipped += 1;
                 continue;
             }
-            
+
             // Add to result
             result.push_back((bounty_id, escrow));
             count += 1;
         }
-        
+
         result
     }
-    
+
     /// Get aggregate statistics for the contract.
     ///
     /// # Performance
@@ -1762,11 +1766,11 @@ impl BountyEscrowContract {
             .instance()
             .get(&DataKey::BountyRegistry)
             .unwrap_or(vec![&env]);
-            
+
         let mut total_locked: i128 = 0;
         let mut total_released: i128 = 0;
         let mut total_refunded: i128 = 0;
-        
+
         for i in 0..registry.len() {
             let bounty_id = registry.get(i).unwrap();
             if env.storage().persistent().has(&DataKey::Escrow(bounty_id)) {
@@ -1775,29 +1779,29 @@ impl BountyEscrowContract {
                     .persistent()
                     .get(&DataKey::Escrow(bounty_id))
                     .unwrap();
-                    
+
                 match escrow.status {
                     EscrowStatus::Locked => {
                         total_locked += escrow.remaining_amount;
-                    },
+                    }
                     EscrowStatus::Released => {
-                         total_released += escrow.amount; 
-                    },
+                        total_released += escrow.amount;
+                    }
                     EscrowStatus::Refunded => {
                         for record in escrow.refund_history.iter() {
                             total_refunded += record.amount;
                         }
-                    },
+                    }
                     EscrowStatus::PartiallyRefunded => {
                         total_locked += escrow.remaining_amount;
-                         for record in escrow.refund_history.iter() {
+                        for record in escrow.refund_history.iter() {
                             total_refunded += record.amount;
                         }
                     }
                 }
             }
         }
-        
+
         EscrowStats {
             total_bounties: registry.len() as u64,
             total_locked_amount: total_locked,
@@ -1805,7 +1809,6 @@ impl BountyEscrowContract {
             total_refunded_amount: total_refunded,
         }
     }
-
 
     /// Batch lock funds for multiple bounties in a single transaction.
     /// This improves gas efficiency by reducing transaction overhead.
@@ -1825,7 +1828,7 @@ impl BountyEscrowContract {
     /// This operation is atomic - if any item fails, the entire transaction reverts.
     pub fn batch_lock_funds(env: Env, items: Vec<LockFundsItem>) -> Result<u32, Error> {
         // Validate batch size
-        let batch_size = items.len() as u32;
+        let batch_size = items.len();
         if batch_size == 0 {
             return Err(Error::InvalidBatchSize);
         }
@@ -1959,7 +1962,7 @@ impl BountyEscrowContract {
     /// This operation is atomic - if any item fails, the entire transaction reverts.
     pub fn batch_release_funds(env: Env, items: Vec<ReleaseFundsItem>) -> Result<u32, Error> {
         // Validate batch size
-        let batch_size = items.len() as u32;
+        let batch_size = items.len();
         if batch_size == 0 {
             return Err(Error::InvalidBatchSize);
         }
